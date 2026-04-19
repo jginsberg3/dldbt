@@ -1,7 +1,7 @@
 [project]
-name = "dlgit-spike"
+name = "dlgit"
 version = "0.1.0"
-description = "Add your description here"
+description = "Map git branches to DuckLake schemas. dbt runs respect the branch; merging reuses computed data."
 readme = "README.md"
 authors = [
     { name = "Jesse Ginsberg", email = "jginsberg3@gmail.com" }
@@ -10,10 +10,14 @@ requires-python = ">=3.12"
 dependencies = [
     "duckdb>=1.5.2",
     "psycopg[binary]>=3.3.3",
+    "typer>=0.13.0",
+    "rich>=14.0.0",
+    "pydantic>=2.9.0",
+    "pyyaml>=6.0.2",
 ]
 
 [project.scripts]
-dlgit-spike = "dlgit_spike:main"
+dlgit = "dlgit.cli:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -21,6 +25,21 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
+    "mypy>=1.13.0",
     "pytest>=9.0.3",
     "ruff>=0.15.11",
+    "types-pyyaml>=6.0.12",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: requires docker compose (postgres + minio) running",
 ]

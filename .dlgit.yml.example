@@ -1,0 +1,25 @@
+# Sample dlgit config. Copy to .dlgit.yml at the dbt project root and edit.
+catalog:
+  # libpq keyword=value DSN for the DuckLake catalog database.
+  dsn: "host=localhost port=5432 dbname=ducklake user=ducklake password=ducklake"
+
+storage:
+  # Where the ducklake extension puts its parquet files. s3://... or a
+  # local path; DuckDB's httpfs extension handles both.
+  data_path: "s3://ducklake/lake/"
+  # Omit the `s3:` block if data_path is local. If set, dlgit creates a
+  # DuckDB SECRET with these credentials on every attach.
+  s3:
+    endpoint: "localhost:9000"   # omit for real AWS S3
+    region: "us-east-1"
+    access_key_id: "minioadmin"
+    secret_access_key: "minioadmin"
+    url_style: "path"
+    use_ssl: false
+
+# The schema that represents the `main` branch. DuckLake auto-creates a
+# `main` schema on first attach.
+main_branch: "main"
+
+# dlgit refuses to drop these schemas via `dlgit branch drop`.
+protected_branches: ["main", "master"]
