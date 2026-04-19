@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from dlgit.errors import InvalidBranchNameError
+from dldbt.errors import InvalidBranchNameError
 
 _NON_IDENT_CHARS = re.compile(r"[^a-z0-9_]")
 _MULTI_UNDERSCORE = re.compile(r"_+")

@@ -9,14 +9,14 @@ import duckdb
 import psycopg
 import pytest
 
-from dlgit.config import CatalogConfig, Config, S3Settings, StorageConfig
+from dldbt.config import CatalogConfig, Config, S3Settings, StorageConfig
 
 PG_DSN = os.environ.get(
-    "DLGIT_TEST_PG_DSN",
+    "DLDBT_TEST_PG_DSN",
     "host=localhost port=5432 dbname=ducklake user=ducklake password=ducklake",
 )
-S3_ENDPOINT = os.environ.get("DLGIT_TEST_S3_ENDPOINT", "localhost:9000")
-S3_BUCKET = os.environ.get("DLGIT_TEST_S3_BUCKET", "ducklake")
+S3_ENDPOINT = os.environ.get("DLDBT_TEST_S3_ENDPOINT", "localhost:9000")
+S3_BUCKET = os.environ.get("DLDBT_TEST_S3_BUCKET", "ducklake")
 
 
 def _service_up(host: str, port: int) -> bool:
@@ -75,7 +75,7 @@ def integration_config(integration_prefix: str) -> Config:
 
 @pytest.fixture
 def clean_catalog() -> Iterator[None]:
-    """Wipe any ducklake_* and dlgit_meta state from Postgres before the test."""
+    """Wipe any ducklake_* and dldbt_meta state from Postgres before the test."""
     _reset_catalog()
     yield
     _reset_catalog()
@@ -91,7 +91,7 @@ def _reset_catalog() -> None:
         )
         for (t,) in cur.fetchall():
             cur.execute(f'DROP TABLE IF EXISTS public."{t}" CASCADE')
-        cur.execute("DROP SCHEMA IF EXISTS dlgit_meta CASCADE")
+        cur.execute("DROP SCHEMA IF EXISTS dldbt_meta CASCADE")
 
 
 @pytest.fixture
@@ -100,7 +100,7 @@ def seeded_main(
 ) -> Iterator[Config]:
     """Bring the lake up with main.events populated via a direct DuckDB session.
 
-    Tests use this as a pre-state: data already lives in main, and dlgit init
+    Tests use this as a pre-state: data already lives in main, and dldbt init
     has not been run yet."""
     con = duckdb.connect()
     con.execute("INSTALL ducklake")

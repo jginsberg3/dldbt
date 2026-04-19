@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from dlgit.errors import InvalidBranchNameError
-from dlgit.git_ops.branch import sanitize_branch_name
+from dldbt.errors import InvalidBranchNameError
+from dldbt.git_ops.branch import sanitize_branch_name
 
 
 @pytest.mark.parametrize(

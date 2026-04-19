@@ -1,6 +1,6 @@
-# dlgit — Implementation Plan
+# dldbt — Implementation Plan
 
-Working codename: **dlgit** (DuckLake + git). Rename later.
+Working codename: **dldbt** (DuckLake + git). Rename later.
 
 A tool that makes git branches map to DuckLake schemas, dbt runs respect the current branch, and merging a branch to `main` reuses the data it already computed. Closest prior art: SQLMesh Virtual Data Environments + lakeFS branching, but co-designed with dbt-duckdb and the DuckLake catalog.
 
@@ -9,10 +9,10 @@ A tool that makes git branches map to DuckLake schemas, dbt runs respect the cur
 ## Core design decisions (locked)
 
 1. **Fingerprint-based model identity.** Each model gets a content hash = f(rendered SQL, upstream fingerprints, config that affects output). Two models with the same fingerprint share physical Parquet files. This is the foundation — every other feature depends on it.
-2. **Time-travel sources at branch creation.** Sources are frozen to the DuckLake snapshot at the moment the branch was created. `dlgit sync` pulls the latest main state (updated sources + any newly-materialized tables on main) into the feature branch.
+2. **Time-travel sources at branch creation.** Sources are frozen to the DuckLake snapshot at the moment the branch was created. `dldbt sync` pulls the latest main state (updated sources + any newly-materialized tables on main) into the feature branch.
 3. **Rebase before merge.** Merging a feature branch requires it to be rebased on current main first. No 3-way Parquet merges. Ever.
 4. **Single-user first, multi-user-ready.** Every catalog mutation is transactional and keyed by branch; design doesn't preclude concurrent branches, we just don't harden it yet.
-5. **Sit beside DuckLake, not fight it.** When DuckLake ships native branching in v2.0, `dlgit` should migrate onto those primitives without a rewrite. Keep our abstractions shallow.
+5. **Sit beside DuckLake, not fight it.** When DuckLake ships native branching in v2.0, `dldbt` should migrate onto those primitives without a rewrite. Keep our abstractions shallow.
 
 ---
 
@@ -34,10 +34,10 @@ No Go in phase 1. You could rewrite the CLI in Go later if perf matters, but Pyt
 ## Repository layout
 
 ```
-dlgit/
+dldbt/
 ├── pyproject.toml
 ├── README.md
-├── src/dlgit/
+├── src/dldbt/
 │   ├── __init__.py
 │   ├── cli.py                 # typer entry point
 │   ├── config.py              # pydantic config models
@@ -80,11 +80,11 @@ dlgit/
 
 ## Catalog metadata schema
 
-All `dlgit` bookkeeping lives in a separate schema in the catalog DB, e.g. `dlgit_meta`. DuckLake's own tables stay untouched.
+All `dldbt` bookkeeping lives in a separate schema in the catalog DB, e.g. `dldbt_meta`. DuckLake's own tables stay untouched.
 
 ```sql
 -- Branches we know about
-CREATE TABLE dlgit_meta.branches (
+CREATE TABLE dldbt_meta.branches (
     name               TEXT PRIMARY KEY,       -- sanitized ducklake schema name
     git_branch         TEXT NOT NULL,          -- original git branch name
     created_at         TIMESTAMPTZ NOT NULL,
@@ -95,8 +95,8 @@ CREATE TABLE dlgit_meta.branches (
 );
 
 -- Which DuckLake snapshot each branch currently points at
-CREATE TABLE dlgit_meta.branch_state (
-    branch             TEXT NOT NULL REFERENCES dlgit_meta.branches(name),
+CREATE TABLE dldbt_meta.branch_state (
+    branch             TEXT NOT NULL REFERENCES dldbt_meta.branches(name),
     ducklake_snapshot  BIGINT NOT NULL,
     git_commit         TEXT NOT NULL,
     updated_at         TIMESTAMPTZ NOT NULL,
@@ -104,7 +104,7 @@ CREATE TABLE dlgit_meta.branch_state (
 );
 
 -- Per-model fingerprints. The heart of the system.
-CREATE TABLE dlgit_meta.model_fingerprints (
+CREATE TABLE dldbt_meta.model_fingerprints (
     branch             TEXT NOT NULL,
     model_name         TEXT NOT NULL,          -- fully-qualified dbt model id
     fingerprint        TEXT NOT NULL,          -- hex hash
@@ -115,7 +115,7 @@ CREATE TABLE dlgit_meta.model_fingerprints (
 );
 
 -- Frozen source references (time-travel anchors)
-CREATE TABLE dlgit_meta.source_freeze (
+CREATE TABLE dldbt_meta.source_freeze (
     branch             TEXT NOT NULL,
     source_name        TEXT NOT NULL,
     frozen_snapshot_id BIGINT NOT NULL,
@@ -148,7 +148,7 @@ If yes → the rest of the plan is engineering. If no → we need a different de
 
 **Claude Code prompt for this phase:**
 
-> Set up a minimal Python project (uv, pyproject.toml, ruff, pytest) named `dlgit-spike`. Write a script that uses Docker Compose to bring up Postgres + MinIO, attaches DuckLake with Postgres catalog and MinIO storage, creates a test table, and then attempts to create a "shallow branch" by inserting duplicate catalog rows under a new schema. The script should print the result of each step and verify the 7 invariants listed in Phase 0 of `dlgit-implementation-plan.md`. Do not worry about CLI structure yet — the goal is to confirm the core mechanic works.
+> Set up a minimal Python project (uv, pyproject.toml, ruff, pytest) named `dldbt-spike`. Write a script that uses Docker Compose to bring up Postgres + MinIO, attaches DuckLake with Postgres catalog and MinIO storage, creates a test table, and then attempts to create a "shallow branch" by inserting duplicate catalog rows under a new schema. The script should print the result of each step and verify the 7 invariants listed in Phase 0 of `dldbt-implementation-plan.md`. Do not worry about CLI structure yet — the goal is to confirm the core mechanic works.
 
 **If the spike fails**, the fallback is to branch at the ducklake-level instead of schema-level (i.e. each branch is its own `ATTACH '...' AS branch_xyz (TYPE ducklake)` pointing at a forked catalog). Document which approach won in `docs/architecture.md`.
 
@@ -159,33 +159,33 @@ If yes → the rest of the plan is engineering. If no → we need a different de
 Ship a CLI that works end-to-end even if nothing else does.
 
 **Deliverables:**
-- `dlgit init` — creates `dlgit_meta` schema, registers the DuckLake
-- `dlgit branch create <name>` — shallow-copies `main` into `branch_<name>`
-- `dlgit branch list` — with status, size, commit
-- `dlgit branch drop <name>` — removes the branch schema; **does not** delete shared parquet files
-- `dlgit branch show <name>` — tables, snapshot id, git commit
-- Config file `.dlgit.yml` in the dbt project root: catalog connection string, storage location, main branch name
+- `dldbt init` — creates `dldbt_meta` schema, registers the DuckLake
+- `dldbt branch create <name>` — shallow-copies `main` into `branch_<name>`
+- `dldbt branch list` — with status, size, commit
+- `dldbt branch drop <name>` — removes the branch schema; **does not** delete shared parquet files
+- `dldbt branch show <name>` — tables, snapshot id, git commit
+- Config file `.dldbt.yml` in the dbt project root: catalog connection string, storage location, main branch name
 
 **Tests:**
 - Unit: branch name sanitization (git `feature/foo-bar` → ducklake `feature_foo_bar`), config parsing
 - Integration: full create → query → drop cycle against a real ducklake
 
-**Exit criteria:** a manual `dlgit branch create test` followed by `duckdb` queries against `test` schema returns identical data to `main`.
+**Exit criteria:** a manual `dldbt branch create test` followed by `duckdb` queries against `test` schema returns identical data to `main`.
 
 ---
 
 ## Phase 2 — Git integration (2–3 days)
 
 **Deliverables:**
-- `dlgit install-hooks` — writes `.git/hooks/post-checkout` and `post-merge` that call `dlgit`
+- `dldbt install-hooks` — writes `.git/hooks/post-checkout` and `post-merge` that call `dldbt`
 - Hook logic:
   - `post-checkout`: if switching to a branch we don't have a schema for, create it (unless configured to skip)
   - `post-merge` on main: trigger promotion check (phase 6)
-- `.dlgitignore`-style config to skip certain branch patterns (`main`, `release/*`)
+- `.dldbtignore`-style config to skip certain branch patterns (`main`, `release/*`)
 - Handle detached HEAD, new empty branches, branch renames
 
 **Tests:**
-- Integration: init a dummy git repo, create/switch branches, verify dlgit state tracks it
+- Integration: init a dummy git repo, create/switch branches, verify dldbt state tracks it
 
 ---
 
@@ -194,19 +194,19 @@ Ship a CLI that works end-to-end even if nothing else does.
 Get the "dbt runs land in the right schema" path working with dbt's own `--defer --state`.
 
 **Deliverables:**
-- Jinja macro `generate_schema_name.sql` that reads `DLGIT_BRANCH` env var
-- `dlgit dbt run [dbt args...]` wrapper that:
+- Jinja macro `generate_schema_name.sql` that reads `DLDBT_BRANCH` env var
+- `dldbt dbt run [dbt args...]` wrapper that:
   1. Ensures branch schema exists
-  2. Sets `DLGIT_BRANCH` env var
+  2. Sets `DLDBT_BRANCH` env var
   3. Adds `--defer --state <path>` pointing at main's last manifest
   4. Invokes dbt
   5. Captures new manifest, stores it keyed by branch+commit
-- `dlgit dbt compile`, `dlgit dbt test`, `dlgit dbt build` — same wrapper pattern
+- `dldbt dbt compile`, `dldbt dbt test`, `dldbt dbt build` — same wrapper pattern
 
 **Tests:**
 - Integration fixture: 3-model dbt project. Run on main, branch it, modify one model, run on branch, verify only the modified model (and its downstream) materialized new parquet in the branch schema.
 
-**Exit criteria:** a `git checkout -b feature/x && dlgit dbt build` does the right thing without any manual setup.
+**Exit criteria:** a `git checkout -b feature/x && dldbt dbt build` does the right thing without any manual setup.
 
 ---
 
@@ -247,11 +247,11 @@ For each model M in dbt DAG (topological order):
 ```
 
 **Deliverables:**
-- `dlgit.fingerprint.hasher.compute()` with unit tests covering every input field
+- `dldbt.fingerprint.hasher.compute()` with unit tests covering every input field
 - DAG walker that propagates fingerprints
-- `dlgit status` command — show modified vs unchanged models (like `git status`)
+- `dldbt status` command — show modified vs unchanged models (like `git status`)
 - Replace phase 3's reliance on `--defer` with fingerprint-driven model selection
-- `dlgit dbt run` now passes dbt a custom model selector based on fingerprint diff
+- `dldbt dbt run` now passes dbt a custom model selector based on fingerprint diff
 
 **Tests:**
 - Unit: same model, different whitespace → same fingerprint
@@ -282,17 +282,17 @@ For each model M in dbt DAG (topological order):
 
 Two operations:
 
-### `dlgit sync` (main → feature, aka "pull" / "rebase")
+### `dldbt sync` (main → feature, aka "pull" / "rebase")
 
 1. Refuse if branch has uncommitted fingerprint changes (dirty state)
 2. Update `source_freeze` to current main snapshot
 3. Re-walk fingerprints: any model whose inputs changed (because sources updated, or main introduced new models) is now stale
-4. For each stale model, the next `dlgit dbt run` rebuilds it
+4. For each stale model, the next `dldbt dbt run` rebuilds it
 5. Update `branches.base_snapshot_id` and `branches.last_git_commit`
 
-### `dlgit merge <branch>` (feature → main)
+### `dldbt merge <branch>` (feature → main)
 
-1. Refuse if branch's base is not current main (must `dlgit sync` first)
+1. Refuse if branch's base is not current main (must `dldbt sync` first)
 2. Compute diff: new models, modified models, unchanged models
 3. Open transaction on catalog DB:
    - For each modified model: update main's catalog row to point at branch's parquet files
@@ -308,7 +308,7 @@ Two operations:
 - Integration tests for: clean merge, merge-after-sync, refuse-merge-without-sync
 
 **Tests:**
-- Integration: feature branch modifies model A, main gets new data in source B, `dlgit sync` picks up new source data, rebuilds only models depending on B, merge succeeds
+- Integration: feature branch modifies model A, main gets new data in source B, `dldbt sync` picks up new source data, rebuilds only models depending on B, merge succeeds
 - Integration: simulate crash mid-merge, verify main's catalog is not corrupted
 
 ---
@@ -316,7 +316,7 @@ Two operations:
 ## Phase 7 — Garbage collection (3–5 days)
 
 **Deliverables:**
-- `dlgit gc` — find parquet files not referenced by any active branch's metadata, delete
+- `dldbt gc` — find parquet files not referenced by any active branch's metadata, delete
 - Reference counting: a parquet file is "live" if at least one row in any branch's catalog references it
 - `--dry-run` mode
 - Configurable grace period (don't delete files created in the last N hours)
@@ -325,10 +325,10 @@ Two operations:
 
 ## Phase 8 — Observability and polish (ongoing)
 
-- `dlgit status` — staged vs unstaged model changes, divergence from main
-- `dlgit diff <branch>` — which tables differ, count/row-level stats (optional: full data diff using duckdb EXCEPT queries)
-- `dlgit log <branch>` — snapshot history
-- `dlgit doctor` — sanity checks: orphaned metadata, broken references, etc.
+- `dldbt status` — staged vs unstaged model changes, divergence from main
+- `dldbt diff <branch>` — which tables differ, count/row-level stats (optional: full data diff using duckdb EXCEPT queries)
+- `dldbt log <branch>` — snapshot history
+- `dldbt doctor` — sanity checks: orphaned metadata, broken references, etc.
 
 ---
 
@@ -361,7 +361,7 @@ Two operations:
 |-----|------|
 | 1   | Phase 0 spike. Learn whether shallow-copy-via-metadata-insert actually works. |
 | 2   | Project scaffold, CI, docker-compose for integration tests |
-| 3   | Phase 1: `dlgit init` + `dlgit branch create` + `dlgit branch drop` |
+| 3   | Phase 1: `dldbt init` + `dldbt branch create` + `dldbt branch drop` |
 | 4   | Phase 1: `branch list`, `branch show`, config file, round-trip test |
 | 5   | Phase 2: git hooks, branch name sanitization, hook installer |
 
@@ -371,7 +371,7 @@ That gets you to "create a git branch, see a matching DuckLake schema magically 
 
 ## First Claude Code prompt (ready to paste)
 
-> I'm building `dlgit`, a Python CLI that integrates DuckLake, dbt, and git — it maps git branches to DuckLake schemas, uses content-addressable fingerprinting for model identity, and makes branch-merge a cheap metadata operation. Full design: see `dlgit-implementation-plan.md` (attached).
+> I'm building `dldbt`, a Python CLI that integrates DuckLake, dbt, and git — it maps git branches to DuckLake schemas, uses content-addressable fingerprinting for model identity, and makes branch-merge a cheap metadata operation. Full design: see `dldbt-implementation-plan.md` (attached).
 >
 > We're starting with Phase 0: a throwaway spike to validate the core assumption that we can shallow-copy a DuckLake schema by inserting catalog rows that reference the same Parquet files. Please:
 >

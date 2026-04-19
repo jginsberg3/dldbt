@@ -1,5 +1,5 @@
 [project]
-name = "dlgit"
+name = "dldbt"
 version = "0.1.0"
 description = "Map git branches to DuckLake schemas. dbt runs respect the branch; merging reuses computed data."
 readme = "README.md"
@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.scripts]
-dlgit = "dlgit.cli:main"
+dldbt = "dldbt.cli:main"
 
 [build-system]
 requires = ["hatchling"]

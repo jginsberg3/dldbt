@@ -9,9 +9,9 @@ from __future__ import annotations
 import duckdb
 import pytest
 
-from dlgit.catalog.ducklake_pg import DuckLakePgAdapter
-from dlgit.config import Config
-from dlgit.errors import BranchAlreadyExistsError
+from dldbt.catalog.ducklake_pg import DuckLakePgAdapter
+from dldbt.config import Config
+from dldbt.errors import BranchAlreadyExistsError
 
 pytestmark = pytest.mark.integration
 

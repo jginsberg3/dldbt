@@ -49,7 +49,7 @@ Two ways to force parquet writes:
   (what this spike uses).
 - Insert more rows than the inlining row limit.
 
-**Phase 1 implication:** `dlgit` must either (a) configure the lake to disable
+**Phase 1 implication:** `dldbt` must either (a) configure the lake to disable
 inlining globally, or (b) branch both parquet data_files *and* inlined_data rows.
 The simpler path is to set `DATA_INLINING_ROW_LIMIT 0` in our managed ATTACH so
 all data lives in parquet — that also matches the "content-addressable Parquet"
@@ -130,7 +130,7 @@ Phase 0 also had a fallback — branch at the DuckLake-attach level instead of
 schema-level. The direct-INSERT approach works, so we stay with schema-as-branch
 for now. If DuckLake changes the catalog in a way that breaks this (e.g. enforces
 a unique constraint on `(path, some_owner_id)`), we can migrate to the fallback
-without reworking `dlgit`'s higher layers because the `CatalogAdapter` interface
+without reworking `dldbt`'s higher layers because the `CatalogAdapter` interface
 hides it.
 
 ## How to reproduce

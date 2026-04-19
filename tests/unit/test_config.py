@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from dlgit.config import Config, load_config
-from dlgit.errors import ConfigError
+from dldbt.config import Config, load_config
+from dldbt.errors import ConfigError
 
 
 def _write(path: Path, body: str) -> Path:
@@ -15,7 +15,7 @@ def _write(path: Path, body: str) -> Path:
 
 def test_load_minimal(tmp_path: Path) -> None:
     p = _write(
-        tmp_path / ".dlgit.yml",
+        tmp_path / ".dldbt.yml",
         """
         catalog:
           dsn: "host=localhost port=5432 dbname=ducklake user=u password=p"
@@ -33,7 +33,7 @@ def test_load_minimal(tmp_path: Path) -> None:
 
 def test_load_full(tmp_path: Path) -> None:
     p = _write(
-        tmp_path / ".dlgit.yml",
+        tmp_path / ".dldbt.yml",
         """
         catalog:
           dsn: "host=pg dbname=l"
@@ -65,12 +65,12 @@ def test_missing_file(tmp_path: Path) -> None:
 
 
 def test_invalid_yaml(tmp_path: Path) -> None:
-    p = _write(tmp_path / ".dlgit.yml", "not: valid: yaml: here")
+    p = _write(tmp_path / ".dldbt.yml", "not: valid: yaml: here")
     with pytest.raises(ConfigError):
         load_config(p)
 
 
 def test_missing_required_fields(tmp_path: Path) -> None:
-    p = _write(tmp_path / ".dlgit.yml", "storage:\n  data_path: /tmp\n")
+    p = _write(tmp_path / ".dldbt.yml", "storage:\n  data_path: /tmp\n")
     with pytest.raises(ConfigError, match="catalog"):
         load_config(p)

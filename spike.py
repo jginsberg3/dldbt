@@ -1,5 +1,5 @@
 """
-Phase 0 spike for dlgit — validate that a DuckLake schema can be
+Phase 0 spike for dldbt — validate that a DuckLake schema can be
 "shallow copied" by inserting catalog rows that point at the same Parquet
 files as an existing schema.
 
@@ -32,14 +32,14 @@ import psycopg
 
 
 PG_DSN = os.environ.get(
-    "DLGIT_SPIKE_PG_DSN",
+    "DLDBT_SPIKE_PG_DSN",
     "host=localhost port=5432 dbname=ducklake user=ducklake password=ducklake",
 )
-S3_ENDPOINT = os.environ.get("DLGIT_SPIKE_S3_ENDPOINT", "localhost:9000")
-S3_BUCKET = os.environ.get("DLGIT_SPIKE_S3_BUCKET", "ducklake")
-S3_PREFIX = os.environ.get("DLGIT_SPIKE_S3_PREFIX", "lake")
-S3_KEY = os.environ.get("DLGIT_SPIKE_S3_KEY", "minioadmin")
-S3_SECRET = os.environ.get("DLGIT_SPIKE_S3_SECRET", "minioadmin")
+S3_ENDPOINT = os.environ.get("DLDBT_SPIKE_S3_ENDPOINT", "localhost:9000")
+S3_BUCKET = os.environ.get("DLDBT_SPIKE_S3_BUCKET", "ducklake")
+S3_PREFIX = os.environ.get("DLDBT_SPIKE_S3_PREFIX", "lake")
+S3_KEY = os.environ.get("DLDBT_SPIKE_S3_KEY", "minioadmin")
+S3_SECRET = os.environ.get("DLDBT_SPIKE_S3_SECRET", "minioadmin")
 LAKE = "my_lake"
 
 

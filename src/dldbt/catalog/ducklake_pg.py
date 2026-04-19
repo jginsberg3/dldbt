@@ -23,15 +23,15 @@ from typing import Any
 import duckdb
 import psycopg
 
-from dlgit.catalog.adapter import BranchRecord, TableInfo
-from dlgit.config import Config
-from dlgit.errors import (
+from dldbt.catalog.adapter import BranchRecord, TableInfo
+from dldbt.config import Config
+from dldbt.errors import (
     BranchAlreadyExistsError,
     BranchNotFoundError,
     NotInitializedError,
 )
 
-DLGIT_META_SCHEMA = "dlgit_meta"
+DLDBT_META_SCHEMA = "dldbt_meta"
 
 
 @dataclass(frozen=True)
@@ -100,7 +100,7 @@ class DuckLakePgAdapter:
             if s3.secret_access_key:
                 parts.append(f"SECRET '{_esc(s3.secret_access_key)}'")
             con.execute(
-                "CREATE OR REPLACE SECRET dlgit_s3 ({})".format(", ".join(parts))
+                "CREATE OR REPLACE SECRET dldbt_s3 ({})".format(", ".join(parts))
             )
         dsn = _esc(self.config.catalog.dsn)
         data_path = _esc(self.config.storage.data_path)
@@ -122,10 +122,10 @@ class DuckLakePgAdapter:
     def init(self) -> None:
         # Attaching in _new_duckdb already created the ducklake_* tables.
         with self.pg.cursor() as cur:
-            cur.execute(f"CREATE SCHEMA IF NOT EXISTS {DLGIT_META_SCHEMA}")
+            cur.execute(f"CREATE SCHEMA IF NOT EXISTS {DLDBT_META_SCHEMA}")
             cur.execute(
                 f"""
-                CREATE TABLE IF NOT EXISTS {DLGIT_META_SCHEMA}.branches (
+                CREATE TABLE IF NOT EXISTS {DLDBT_META_SCHEMA}.branches (
                     name              TEXT PRIMARY KEY,
                     git_branch        TEXT NOT NULL,
                     created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -138,7 +138,7 @@ class DuckLakePgAdapter:
             )
             cur.execute(
                 f"""
-                CREATE TABLE IF NOT EXISTS {DLGIT_META_SCHEMA}.model_fingerprints (
+                CREATE TABLE IF NOT EXISTS {DLDBT_META_SCHEMA}.model_fingerprints (
                     branch             TEXT NOT NULL,
                     model_name         TEXT NOT NULL,
                     fingerprint        TEXT NOT NULL,
@@ -152,7 +152,7 @@ class DuckLakePgAdapter:
             cur.execute(
                 f"""
                 CREATE INDEX IF NOT EXISTS model_fingerprints_fingerprint_idx
-                ON {DLGIT_META_SCHEMA}.model_fingerprints (fingerprint)
+                ON {DLDBT_META_SCHEMA}.model_fingerprints (fingerprint)
                 """
             )
         self.pg.commit()
@@ -178,14 +178,14 @@ class DuckLakePgAdapter:
                   WHERE table_schema = %s AND table_name = 'branches'
                 )
                 """,
-                (DLGIT_META_SCHEMA,),
+                (DLDBT_META_SCHEMA,),
             )
             return bool(cur.fetchone()[0])
 
     def _require_initialized(self) -> None:
         if not self.is_initialized():
             raise NotInitializedError(
-                "dlgit_meta is missing. Run `dlgit init` first."
+                "dldbt_meta is missing. Run `dldbt init` first."
             )
 
     # --- branch registry ------------------------------------------------
@@ -202,7 +202,7 @@ class DuckLakePgAdapter:
         with self.pg.cursor() as cur:
             cur.execute(
                 f"""
-                INSERT INTO {DLGIT_META_SCHEMA}.branches
+                INSERT INTO {DLDBT_META_SCHEMA}.branches
                   (name, git_branch, created_from, base_snapshot_id, last_git_commit)
                 VALUES (%s, %s, %s, %s, %s)
                 RETURNING name, git_branch, created_at, created_from,
@@ -221,7 +221,7 @@ class DuckLakePgAdapter:
                 f"""
                 SELECT name, git_branch, created_at, created_from,
                        base_snapshot_id, last_git_commit, status
-                FROM {DLGIT_META_SCHEMA}.branches
+                FROM {DLDBT_META_SCHEMA}.branches
                 ORDER BY created_at
                 """
             )
@@ -234,7 +234,7 @@ class DuckLakePgAdapter:
                 f"""
                 SELECT name, git_branch, created_at, created_from,
                        base_snapshot_id, last_git_commit, status
-                FROM {DLGIT_META_SCHEMA}.branches
+                FROM {DLDBT_META_SCHEMA}.branches
                 WHERE name = %s
                 """,
                 (name,),
@@ -246,7 +246,7 @@ class DuckLakePgAdapter:
         self._require_initialized()
         with self.pg.cursor() as cur:
             cur.execute(
-                f"UPDATE {DLGIT_META_SCHEMA}.branches SET status = %s WHERE name = %s",
+                f"UPDATE {DLDBT_META_SCHEMA}.branches SET status = %s WHERE name = %s",
                 (status, name),
             )
             if cur.rowcount == 0:

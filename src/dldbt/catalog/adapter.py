@@ -25,7 +25,7 @@ class TableInfo:
 
 
 class CatalogAdapter(Protocol):
-    """Interface between dlgit and whatever DuckLake-like catalog is in use.
+    """Interface between dldbt and whatever DuckLake-like catalog is in use.
 
     A Phase 1 implementation targets the ducklake extension with a Postgres
     catalog and any object store DuckDB can reach. A future implementation
@@ -35,11 +35,11 @@ class CatalogAdapter(Protocol):
 
     # --- setup ---
     def init(self) -> None:
-        """Ensure the catalog is ready for dlgit. Creates dlgit_meta schema
+        """Ensure the catalog is ready for dldbt. Creates dldbt_meta schema
         and registers the main branch. Idempotent."""
 
     def is_initialized(self) -> bool:
-        """True if `dlgit init` has been run against this catalog."""
+        """True if `dldbt init` has been run against this catalog."""
 
     # --- branch registry ---
     def register_branch(

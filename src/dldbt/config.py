@@ -6,9 +6,9 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field, ValidationError
 
-from dlgit.errors import ConfigError
+from dldbt.errors import ConfigError
 
-DEFAULT_CONFIG_FILENAME = ".dlgit.yml"
+DEFAULT_CONFIG_FILENAME = ".dldbt.yml"
 
 
 class S3Settings(BaseModel):
@@ -35,10 +35,10 @@ class Config(BaseModel):
     catalog: CatalogConfig
     storage: StorageConfig
     main_branch: str = "main"
-    # Branches whose schema should never be managed by dlgit (e.g. trunk names).
+    # Branches whose schema should never be managed by dldbt (e.g. trunk names).
     protected_branches: list[str] = Field(default_factory=lambda: ["main", "master"])
     # Name used for the ATTACHed ducklake inside DuckDB. Internal, rarely changed.
-    lake_alias: str = "dlgit_lake"
+    lake_alias: str = "dldbt_lake"
 
 
 def load_config(path: str | Path = DEFAULT_CONFIG_FILENAME) -> Config:

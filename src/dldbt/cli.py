@@ -8,11 +8,11 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from dlgit import __version__
-from dlgit.catalog.ducklake_pg import DuckLakePgAdapter
-from dlgit.config import DEFAULT_CONFIG_FILENAME, Config, load_config
-from dlgit.errors import DlgitError
-from dlgit.git_ops.branch import sanitize_branch_name
+from dldbt import __version__
+from dldbt.catalog.ducklake_pg import DuckLakePgAdapter
+from dldbt.config import DEFAULT_CONFIG_FILENAME, Config, load_config
+from dldbt.errors import DldbtError
+from dldbt.git_ops.branch import sanitize_branch_name
 
 app = typer.Typer(
     help="Map git branches to DuckLake schemas.",
@@ -30,7 +30,7 @@ ConfigPathOption = Annotated[
     typer.Option(
         "--config",
         "-c",
-        help="Path to .dlgit.yml config file.",
+        help="Path to .dldbt.yml config file.",
         show_default=True,
     ),
 ]
@@ -39,7 +39,7 @@ ConfigPathOption = Annotated[
 def _load(config_path: Path) -> Config:
     try:
         return load_config(config_path)
-    except DlgitError as e:
+    except DldbtError as e:
         err_console.print(f"[red]error:[/red] {e}")
         raise typer.Exit(code=2) from e
 
@@ -47,7 +47,7 @@ def _load(config_path: Path) -> Config:
 def _run(fn):
     try:
         fn()
-    except DlgitError as e:
+    except DldbtError as e:
         err_console.print(f"[red]error:[/red] {e}")
         raise typer.Exit(code=1) from e
 
@@ -58,7 +58,7 @@ def _root(
     version: bool = typer.Option(False, "--version", help="Print version and exit."),
 ) -> None:
     if version:
-        console.print(f"dlgit {__version__}")
+        console.print(f"dldbt {__version__}")
         raise typer.Exit()
     if ctx.invoked_subcommand is None:
         console.print(ctx.get_help())
@@ -69,7 +69,7 @@ def _root(
 def init(
     config_path: ConfigPathOption = Path(DEFAULT_CONFIG_FILENAME),
 ) -> None:
-    """Initialize dlgit against the catalog referenced by the config."""
+    """Initialize dldbt against the catalog referenced by the config."""
     config = _load(config_path)
 
     def go() -> None:
@@ -77,7 +77,7 @@ def init(
             adapter.init()
             main = adapter.get_branch(config.main_branch)
         console.print(
-            f"[green]initialized[/green] dlgit at [bold]{config.storage.data_path}[/bold]"
+            f"[green]initialized[/green] dldbt at [bold]{config.storage.data_path}[/bold]"
         )
         if main is not None:
             console.print(
@@ -138,7 +138,7 @@ def branch_drop(
         if schema_name in set(config.protected_branches):
             err_console.print(
                 f"[red]refusing:[/red] {schema_name!r} is listed in "
-                f"protected_branches and cannot be dropped via dlgit"
+                f"protected_branches and cannot be dropped via dldbt"
             )
             raise typer.Exit(code=1)
         with DuckLakePgAdapter(config) as adapter:
@@ -153,7 +153,7 @@ def branch_drop(
 def branch_list(
     config_path: ConfigPathOption = Path(DEFAULT_CONFIG_FILENAME),
 ) -> None:
-    """List every branch dlgit knows about."""
+    """List every branch dldbt knows about."""
     config = _load(config_path)
 
     def go() -> None:

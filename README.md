@@ -1,4 +1,4 @@
-# dlgit (codename)
+# dldbt (codename)
 
 A tool that maps git branches to DuckLake schemas so dbt runs respect the
 current branch and merging reuses the data it already computed. See

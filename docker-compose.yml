@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:16
-    container_name: dlgit-spike-postgres
+    container_name: dldbt-spike-postgres
     environment:
       POSTGRES_USER: ducklake
       POSTGRES_PASSWORD: ducklake
@@ -18,7 +18,7 @@ services:
 
   minio:
     image: minio/minio:latest
-    container_name: dlgit-spike-minio
+    container_name: dldbt-spike-minio
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
@@ -36,7 +36,7 @@ services:
 
   minio-setup:
     image: minio/mc:latest
-    container_name: dlgit-spike-minio-setup
+    container_name: dldbt-spike-minio-setup
     depends_on:
       minio:
         condition: service_healthy
