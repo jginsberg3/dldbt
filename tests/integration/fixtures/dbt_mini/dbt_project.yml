@@ -1,0 +1,20 @@
+name: dldbt_mini
+version: "1.0.0"
+config-version: 2
+
+profile: dldbt_mini
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  dldbt_mini:
+    +materialized: table
+
+seeds:
+  dldbt_mini:
+    +quote_columns: false

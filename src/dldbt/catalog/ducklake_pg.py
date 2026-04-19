@@ -475,7 +475,12 @@ class DuckLakePgAdapter:
         self, cur: psycopg.Cursor, change: str
     ) -> None:
         """Insert a new ducklake_snapshot row + snapshot_changes entry so
-        DuckDB's next attach sees our catalog mutation."""
+        DuckDB's next attach sees our catalog mutation.
+
+        next_file_id must be set to MAX(data_file_id) + 1: shallow-copy
+        bulk-inserts rows into ducklake_data_file without going through
+        DuckLake's own ID counter, so without this bump the next dbt write
+        collides on the primary key."""
         snap_cols = _columns(cur, "ducklake_snapshot")
         cur.execute(
             f"SELECT {_quote_cols(snap_cols)} FROM public.ducklake_snapshot "
@@ -484,6 +489,11 @@ class DuckLakePgAdapter:
         latest = cur.fetchone()
         if latest is None:
             return
+        cur.execute(
+            "SELECT COALESCE(MAX(data_file_id), 0) + 1 "
+            "FROM public.ducklake_data_file"
+        )
+        next_file_id = int(cur.fetchone()[0])
         now = datetime.now(UTC)
         new_row: list[Any] = []
         for col, val in zip(snap_cols, latest, strict=True):
@@ -491,8 +501,15 @@ class DuckLakePgAdapter:
                 new_row.append(int(val) + 1)
             elif col == "snapshot_time":
                 new_row.append(now)
-            elif col in ("next_catalog_id", "next_file_id"):
-                new_row.append(int(val) + 1 if val is not None else 1)
+            elif col == "next_file_id":
+                # Align to reality after our bulk inserts.
+                new_row.append(max(int(val or 0), next_file_id))
+            elif col == "next_catalog_id":
+                # We did not create new catalog objects in this synthetic
+                # snapshot (the CREATE SCHEMA / CREATE TABLE already bumped
+                # next_catalog_id during DuckDB's own commit), so carry it
+                # forward unchanged.
+                new_row.append(val)
             else:
                 new_row.append(val)
         cur.execute(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from importlib.resources import files as resource_files
 from pathlib import Path
 from typing import Annotated
 
@@ -11,6 +12,11 @@ from rich.table import Table
 from dldbt import __version__
 from dldbt.catalog.ducklake_pg import DuckLakePgAdapter
 from dldbt.config import DEFAULT_CONFIG_FILENAME, Config, load_config
+from dldbt.dbt_ops import runner as dbt_runner
+from dldbt.dbt_ops.profile import (
+    detect_profile_name,
+    write_profile,
+)
 from dldbt.errors import DldbtError
 from dldbt.git_ops import hooks as hook_ops
 from dldbt.git_ops.branch import sanitize_branch_name
@@ -70,6 +76,21 @@ def _root(
 @app.command()
 def init(
     config_path: ConfigPathOption = Path(DEFAULT_CONFIG_FILENAME),
+    project: Annotated[
+        Path,
+        typer.Option(
+            "--project",
+            help="Path to a dbt project root. If a dbt_project.yml is found "
+            "there, dldbt writes a matching profiles.yml.",
+        ),
+    ] = Path("."),
+    skip_profile: Annotated[
+        bool,
+        typer.Option(
+            "--skip-profile",
+            help="Don't generate profiles.yml even if a dbt project is present.",
+        ),
+    ] = False,
 ) -> None:
     """Initialize dldbt against the catalog referenced by the config."""
     config = _load(config_path)
@@ -85,6 +106,17 @@ def init(
             console.print(
                 f"  main branch: [cyan]{main.name}[/cyan] @ snapshot {main.base_snapshot_id}"
             )
+        if skip_profile:
+            return
+        profile_name = detect_profile_name(project)
+        if profile_name is None:
+            return
+        path = write_profile(
+            config, profile_name=profile_name, profiles_dir=project
+        )
+        console.print(
+            f"  profile: [cyan]{profile_name}[/cyan] -> {path}"
+        )
 
     _run(go)
 
@@ -346,6 +378,148 @@ def _post_merge(
     # Phase 6 will wire the promotion check here. For now we're a no-op so
     # merges into main don't print noise on every pull.
     return
+
+
+@app.command("install-macro")
+def install_macro(
+    project: Annotated[
+        Path,
+        typer.Option(
+            "--project",
+            help="Path to the dbt project root (where dbt_project.yml lives).",
+        ),
+    ] = Path("."),
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Overwrite an existing macro file."),
+    ] = False,
+) -> None:
+    """Copy dldbt's generate_schema_name macro into the project's macros/."""
+    macros_dir = project / "macros"
+    macros_dir.mkdir(parents=True, exist_ok=True)
+    dst = macros_dir / "dldbt_schema.sql"
+    existed = dst.exists()
+    if existed and not force:
+        err_console.print(
+            f"[yellow]skipped[/yellow]  {dst} already exists "
+            "(re-run with --force to overwrite)"
+        )
+        return
+    src = resource_files("dldbt.dbt_ops.macros").joinpath(
+        "generate_schema_name.sql"
+    )
+    dst.write_text(src.read_text())
+    action = "updated" if existed else "installed"
+    console.print(f"[green]{action}[/green] macro -> {dst}")
+
+
+@app.command("generate-profile")
+def generate_profile(
+    project: Annotated[
+        Path,
+        typer.Option(
+            "--project",
+            help="Path to the dbt project root (where dbt_project.yml lives).",
+        ),
+    ] = Path("."),
+    profiles_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--profiles-dir",
+            help="Where to write profiles.yml (defaults to --project).",
+        ),
+    ] = None,
+    config_path: ConfigPathOption = Path(DEFAULT_CONFIG_FILENAME),
+) -> None:
+    """Write a dbt profiles.yml matching this dldbt config."""
+    config = _load(config_path)
+
+    def go() -> None:
+        profile_name = detect_profile_name(project)
+        if profile_name is None:
+            err_console.print(
+                f"[red]error:[/red] no dbt_project.yml under {project} "
+                "(need it to decide the profile name)"
+            )
+            raise typer.Exit(code=1)
+        out_dir = profiles_dir if profiles_dir is not None else project
+        path = write_profile(
+            config, profile_name=profile_name, profiles_dir=out_dir
+        )
+        console.print(
+            f"[green]wrote[/green] profile [cyan]{profile_name}[/cyan] -> {path}"
+        )
+
+    _run(go)
+
+
+@app.command(
+    "dbt",
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+    help="Run dbt with DLDBT_BRANCH set to the current git branch schema.",
+)
+def dbt_passthrough(
+    ctx: typer.Context,
+    subcommand: Annotated[
+        str,
+        typer.Argument(help="dbt subcommand (run, build, test, compile, ...)"),
+    ],
+    full: Annotated[
+        bool,
+        typer.Option(
+            "--full",
+            help="Skip --defer/--select state:modified+ and build everything.",
+        ),
+    ] = False,
+    project: Annotated[
+        Path,
+        typer.Option("--project", help="Path to the dbt project root."),
+    ] = Path("."),
+    profiles_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--profiles-dir",
+            help="Pass through to dbt; defaults to --project.",
+        ),
+    ] = None,
+    config_path: ConfigPathOption = Path(DEFAULT_CONFIG_FILENAME),
+) -> None:
+    config = _load(config_path)
+
+    def go() -> None:
+        git_branch = hook_ops.current_git_branch(project.resolve())
+        if git_branch is None:
+            branch_schema = config.main_branch
+            is_main = True
+        else:
+            branch_schema = sanitize_branch_name(git_branch)
+            is_main = branch_schema == config.main_branch
+
+        main_manifest_dir = dbt_runner.resolve_main_manifest_dir(
+            project, config.main_branch
+        )
+        plan = dbt_runner.build_run_plan(
+            subcommand=subcommand,
+            user_args=list(ctx.args),
+            project_root=project,
+            branch_schema=branch_schema,
+            is_main_branch=is_main,
+            main_manifest_dir=main_manifest_dir,
+            full=full,
+        )
+        effective_profiles_dir = (
+            profiles_dir if profiles_dir is not None else project
+        )
+        rc = dbt_runner.execute(
+            plan,
+            project_root=project,
+            branch_schema=branch_schema,
+            profiles_dir=effective_profiles_dir,
+        )
+        if rc != 0:
+            raise typer.Exit(code=rc)
+
+    _run(go)
 
 
 def main() -> None:
