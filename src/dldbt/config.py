@@ -31,6 +31,19 @@ class CatalogConfig(BaseModel):
     dsn: str
 
 
+class AutoCreateConfig(BaseModel):
+    # Opt-in flag: when true, the post-checkout git hook creates a matching
+    # dldbt schema after a git branch checkout. Off by default so an
+    # install-hooks run is not immediately destructive.
+    enabled: bool = False
+    # Git branch patterns that the auto-create hook should ignore. Glob syntax
+    # via fnmatch (e.g. "release/*"). Applies only to hook-driven creation;
+    # `dldbt branch create` still works for these names.
+    skip_patterns: list[str] = Field(
+        default_factory=lambda: ["main", "master", "release/*"]
+    )
+
+
 class Config(BaseModel):
     catalog: CatalogConfig
     storage: StorageConfig
@@ -39,6 +52,7 @@ class Config(BaseModel):
     protected_branches: list[str] = Field(default_factory=lambda: ["main", "master"])
     # Name used for the ATTACHed ducklake inside DuckDB. Internal, rarely changed.
     lake_alias: str = "dldbt_lake"
+    auto_create: AutoCreateConfig = Field(default_factory=AutoCreateConfig)
 
 
 def load_config(path: str | Path = DEFAULT_CONFIG_FILENAME) -> Config:

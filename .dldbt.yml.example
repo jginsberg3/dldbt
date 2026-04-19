@@ -23,3 +23,12 @@ main_branch: "main"
 
 # dldbt refuses to drop these schemas via `dldbt branch drop`.
 protected_branches: ["main", "master"]
+
+# Controls the post-checkout git hook installed by `dldbt install-hooks`.
+auto_create:
+  # Opt-in: off by default. When true, checking out a git branch automatically
+  # creates a matching dldbt schema (shallow-copied from main_branch).
+  enabled: false
+  # Glob patterns (fnmatch) of git branches the hook should leave alone.
+  # Does NOT affect manual `dldbt branch create`.
+  skip_patterns: ["main", "master", "release/*"]

@@ -12,7 +12,9 @@ from dldbt import __version__
 from dldbt.catalog.ducklake_pg import DuckLakePgAdapter
 from dldbt.config import DEFAULT_CONFIG_FILENAME, Config, load_config
 from dldbt.errors import DldbtError
+from dldbt.git_ops import hooks as hook_ops
 from dldbt.git_ops.branch import sanitize_branch_name
+from dldbt.git_ops.match import branch_matches_any
 
 app = typer.Typer(
     help="Map git branches to DuckLake schemas.",
@@ -245,6 +247,105 @@ def _humanize_bytes(n: int | None) -> str:
     if i == 0:
         return f"{int(val)} {units[i]}"
     return f"{val:.1f} {units[i]}"
+
+
+@app.command("install-hooks")
+def install_hooks(
+    project_root: Annotated[
+        Path,
+        typer.Option(
+            "--project-root",
+            help="Path to the git repo root (defaults to current directory).",
+        ),
+    ] = Path("."),
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force",
+            help="Overwrite existing non-dldbt hooks at the target paths.",
+        ),
+    ] = False,
+) -> None:
+    """Install dldbt's post-checkout and post-merge hooks into .git/hooks."""
+
+    def go() -> None:
+        results = hook_ops.install_all_hooks(
+            project_root=project_root, force=force
+        )
+        for r in results:
+            if r.action == "installed":
+                console.print(f"[green]installed[/green] {r.hook} -> {r.path}")
+            elif r.action == "updated":
+                console.print(f"[yellow]updated[/yellow]   {r.hook} -> {r.path}")
+            else:
+                err_console.print(
+                    f"[yellow]skipped[/yellow]   {r.hook} (foreign hook at "
+                    f"{r.path}; re-run with --force to overwrite)"
+                )
+
+    _run(go)
+
+
+@app.command("__post-checkout", hidden=True)
+def _post_checkout(
+    prev_head: str = typer.Argument(...),
+    new_head: str = typer.Argument(...),
+    flag: str = typer.Argument(...),
+    config_path: ConfigPathOption = Path(DEFAULT_CONFIG_FILENAME),
+) -> None:
+    """Git post-checkout hook entry point. Non-fatal on every error path so
+    we never break the user's `git checkout`."""
+    try:
+        if not hook_ops.is_branch_checkout(prev_head, new_head, flag):
+            return
+        if not config_path.exists():
+            return
+        config = load_config(config_path)
+        if not config.auto_create.enabled:
+            return
+        git_branch = hook_ops.current_git_branch(config_path.parent.resolve())
+        if git_branch is None:
+            return  # detached HEAD or not a repo
+        if branch_matches_any(git_branch, config.auto_create.skip_patterns):
+            return
+        schema_name = sanitize_branch_name(git_branch)
+        with DuckLakePgAdapter(config) as adapter:
+            if not adapter.is_initialized():
+                err_console.print(
+                    "[yellow]dldbt:[/yellow] catalog not initialized; "
+                    "skipping auto-create (run `dldbt init`)"
+                )
+                return
+            if adapter.get_branch(schema_name) is not None:
+                return  # already registered
+            src = config.main_branch
+            base_snapshot = adapter.current_snapshot_id()
+            adapter.shallow_copy_schema(src, schema_name)
+            adapter.register_branch(
+                name=schema_name,
+                git_branch=git_branch,
+                created_from=src,
+                base_snapshot_id=base_snapshot,
+                last_git_commit=new_head,
+            )
+        console.print(
+            f"[green]dldbt:[/green] created schema "
+            f"[cyan]{schema_name}[/cyan] from [cyan]{src}[/cyan] "
+            f"for git branch [bold]{git_branch}[/bold]"
+        )
+    except DldbtError as e:
+        err_console.print(f"[yellow]dldbt:[/yellow] {e}")
+
+
+@app.command("__post-merge", hidden=True)
+def _post_merge(
+    _squashed: str = typer.Argument(..., metavar="SQUASHED"),
+    config_path: ConfigPathOption = Path(DEFAULT_CONFIG_FILENAME),
+) -> None:
+    """Git post-merge hook entry point. Placeholder until phase 6 lands."""
+    # Phase 6 will wire the promotion check here. For now we're a no-op so
+    # merges into main don't print noise on every pull.
+    return
 
 
 def main() -> None:
